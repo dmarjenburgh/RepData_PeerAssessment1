@@ -5,21 +5,116 @@ output:
     keep_md: true
 ---
 
+```{r setup, include=FALSE}
+library(dplyr, ggplot2)
+```
 
 ## Loading and preprocessing the data
+We load the data with columns 'steps', 'date' and 'interval'
+```{r}
+unzip("activity.zip")
+activity <- read.csv("activity.csv", colClasses = c("numeric", "Date", "numeric"))
+```
 
 
+## What is the mean total number of steps taken per day?
+1. Calculate the total number of steps taken per day
+```{r}
+stepsummary <- activity %>% group_by(date) %>% summarise(totalsteps = sum(steps))
+head(stepsummary)
+```
 
-## What is mean total number of steps taken per day?
+2. Make a histogram of the total number of steps taken each day
+```{r}
+hist(stepsummary$totalsteps,
+     breaks = seq(0, 22500, by = 2500),
+     main = "Histogram of total number of steps per day",
+     xlab = "Number of steps per day",
+     col = "red")
+```
 
-
+3. Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+mean(stepsummary$totalsteps, na.rm = TRUE)
+median(stepsummary$totalsteps, na.rm = TRUE)
+```
 
 ## What is the average daily activity pattern?
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+avgsteps <- activity %>% group_by(interval) %>% summarise(average = mean(steps, na.rm = TRUE))
+plot(avgsteps,
+     type = "l",
+     main = "Average number of steps taken by 5-minute interval.\nAveraged over all days.",
+     ylab = "Average number of steps",
+     xlab = "Interval",
+     col = "blue")
+```
 
-
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+avgsteps[which.max(avgsteps$average),]
+```
 
 ## Imputing missing values
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r}
+sum(is.na(activity$steps))
+```
 
+2. Devise a strategy for filling in all of the missing values in the dataset
+For the missing values, we will take the mean of that interval, averaged over all days and rounded to the nearest integer.
+```{r}
+roundedavgsteps <- activity %>% group_by(interval) %>% summarise(average = round(mean(steps, na.rm = TRUE)))
+```
 
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+imputedactivity <- left_join(activity, roundedavgsteps, by = "interval")
+imputedactivity[is.na(activity$steps), "steps"] <- imputedactivity[is.na(activity$steps), "average"]
+```
+Before:
+```{r}
+activity[285:295,]
+```
+After:
+```{r}
+imputedactivity[285:295,]
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+
+```{r}
+imputedstepsummary <- imputedactivity %>% group_by(date) %>% summarise(totalsteps = sum(steps))
+hist(imputedstepsummary$totalsteps,
+     breaks = seq(0, 22500, by = 2500),
+     main = "Histogram of total number of steps per day, based on imputed data",
+     xlab = "Number of steps per day",
+     col = "red")
+mean(imputedstepsummary$totalsteps, na.rm = TRUE)
+median(imputedstepsummary$totalsteps, na.rm = TRUE)
+```
+These values differ only slightly from the original data with missing values.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+library(lattice)
+stepaverages <- imputedactivity %>%
+    mutate(weektime = factor(ifelse(weekdays(date) %in% c("Saturday", "Sunday"),
+                                    "Weekend",
+                                    "Weekday"))) %>%
+    group_by(weektime, interval) %>%
+    summarise(average = mean(steps))
+               
+xyplot(average ~ interval | weektime,
+       data = stepaverages,
+       layout = 1:2,
+       type = "l",
+       main = "Average number of steps by interval and weektime.\nBased on imputed data",
+       ylab = "Number of steps",
+       xlab = "Interval")
+```
+
+It seems most activity occurs in the morning around 8:30 AM during the weekdays.
+In the weekends, the activity is more spreadout over the day and it starts later.
